@@ -20,9 +20,24 @@ const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 const PORT = Number(env('PORT', '8080')) || 8080;
 const DATA_DIR = path.resolve(env('DATA_DIR', '/data'));
-const ACCOUNT = env('STEAM_ACCOUNT_NAME');
+// a Steam Desktop Authenticator .maFile, mounted read-only (STEAM_MAFILE): its shared_secret (and account_name) are
+// read once at start-up, kept in memory only, and never written or logged
+function readMaFile(file) {
+    if (!file) return {};
+    try {
+        const ma = JSON.parse(fs.readFileSync(file, 'utf8'));
+        if (typeof ma?.shared_secret !== 'string' || !ma.shared_secret) throw new Error('it has no shared_secret (is it encrypted? export it unencrypted from SDA)');
+        return { sharedSecret: ma.shared_secret, account: typeof ma.account_name === 'string' ? ma.account_name : '' };
+    } catch (err) {
+        // the reason only, never the file's contents
+        console.error(`STEAM_MAFILE (${file}) could not be used: ${err instanceof SyntaxError ? 'it is not valid JSON (an encrypted maFile cannot be read)' : err.message}`);
+        process.exit(1);
+    }
+}
+const MA = readMaFile(env('STEAM_MAFILE'));
+const ACCOUNT = env('STEAM_ACCOUNT_NAME') || MA.account || '';
 const PASSWORD = process.env.STEAM_PASSWORD || '';
-const SHARED_SECRET = env('STEAM_SHARED_SECRET');
+const SHARED_SECRET = env('STEAM_SHARED_SECRET') || MA.sharedSecret || '';
 const UI_USER = env('UI_USER', 'admin');
 const UI_PASSWORD = process.env.UI_PASSWORD || '';
 const MAX = Math.max(1, Math.min(LANES, Math.floor(Number(env('MAX_PER_OPEN', '10'))) || 10));

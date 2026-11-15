@@ -50,7 +50,16 @@ Pick one:
 - **With the mobile authenticator's `shared_secret`** (recommended for an alt you run all the time). If you moved the
   authenticator to a tool such as [Steam Desktop Authenticator](https://github.com/Jessecar96/SteamDesktopAuthenticator)
   or [steamguard-cli](https://github.com/dyc3/steamguard-cli), the `shared_secret` is in its account file (the `.maFile`).
-  Put it in `STEAM_SHARED_SECRET` and the container makes its own codes.
+  Either mount the `.maFile` itself (it is only read, at start-up; the secret stays in memory and is never logged
+  or copied):
+
+  ```sh
+  docker run ... -v /path/to/12345678901234567.maFile:/run/secrets/steam.maFile:ro \
+    -e STEAM_MAFILE=/run/secrets/steam.maFile tf2-unboxer
+  ```
+
+  or copy its `shared_secret` value into `STEAM_SHARED_SECRET`. Either way the container makes its own codes. The
+  `.maFile` must be **unencrypted** (SDA's encryption passkey off, or export it with steamguard-cli).
 - **Without it.** Leave `STEAM_SHARED_SECRET` empty and run the container the first time **interactively** (`-it`,
   see below). Steam asks for the code from your email or phone in the console; type it. After that the container keeps
   a login token in its `/data` volume and signs in by itself.
@@ -72,6 +81,7 @@ and fill in at least `STEAM_ACCOUNT_NAME`, `STEAM_PASSWORD` and `UI_PASSWORD`. *
 | `STEAM_ACCOUNT_NAME` | | Steam login name of the account holding the cases and keys. Empty = demo. |
 | `STEAM_PASSWORD` | | Its password (used for the first sign-in; a login token is used after that). |
 | `STEAM_SHARED_SECRET` | | Optional. The authenticator's `shared_secret`, so Steam Guard codes are made for you. |
+| `STEAM_MAFILE` | | Optional. Path (inside the container) of a mounted, unencrypted `.maFile`: its `shared_secret` is used, and its `account_name` when `STEAM_ACCOUNT_NAME` is empty. |
 | `UI_PASSWORD` | | **Required** unless `DEMO=1`: the page can spend keys. The browser asks for it. |
 | `UI_USER` | `admin` | User name for the page. |
 | `DEMO` | | `1` runs the demo account even when Steam details are set. |
@@ -92,6 +102,14 @@ docker run -it --rm --env-file .env -v tf2-unboxer-data:/data -p 127.0.0.1:8080:
 
 # from then on (or straight away with a shared secret): in the background
 docker run -d --name tf2-unboxer --restart unless-stopped --env-file .env \
+  -v tf2-unboxer-data:/data -p 127.0.0.1:8080:8080 tf2-unboxer
+```
+
+With a `.maFile` (no Steam Guard code to type, ever):
+
+```sh
+docker run -d --name tf2-unboxer --restart unless-stopped --env-file .env \
+  -v /path/to/your.maFile:/run/secrets/steam.maFile:ro -e STEAM_MAFILE=/run/secrets/steam.maFile \
   -v tf2-unboxer-data:/data -p 127.0.0.1:8080:8080 tf2-unboxer
 ```
 
