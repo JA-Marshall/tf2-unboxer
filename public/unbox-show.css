@@ -1,0 +1,99 @@
+/* The unboxing screen (unbox-show.js): a full-screen layer over an admin page. Everything that moves is moved by the
+   script, frame by frame (transform and opacity only), so there are no keyframes or transitions here on purpose. */
+.ubx { position:fixed; inset:0; z-index:2147483000; overflow:hidden; background:#070605; color:#f3ede3; font:14px/1.4 "Segoe UI",Inter,system-ui,-apple-system,Roboto,sans-serif; user-select:none; -webkit-user-select:none; cursor:default; --disp:"Bahnschrift","Inter Display",Inter,"Segoe UI",system-ui,sans-serif; }
+.ubx *, .ubx *::before, .ubx *::after { box-sizing:border-box; }
+.ubx-cam { position:absolute; inset:0; transform-origin:50% 50%; }
+.ubx-bg, .ubx-fx { position:absolute; left:0; top:0; width:100%; height:100%; display:block; }
+.ubx-big { position:absolute; left:50%; top:37%; text-align:center; opacity:0; pointer-events:none; white-space:nowrap; }
+.ubx-big-n { font:700 46vh/0.82 var(--disp); letter-spacing:-.02em; color:rgba(255,196,120,.05); -webkit-text-stroke:2px rgba(255,205,140,.3); font-variant-numeric:tabular-nums; }
+.ubx-big-n i { font-style:normal; font-size:.36em; letter-spacing:0; -webkit-text-stroke:1.5px rgba(255,205,140,.22); margin-left:.06em; }
+.ubx-big.count .ubx-big-n { color:rgba(255,196,120,.14); -webkit-text-stroke:3px rgba(255,220,170,.85); text-shadow:0 0 60px rgba(255,180,90,.35); }
+.ubx-big-c { margin-top:2.2vh; font:600 1.9vh/1 var(--disp); letter-spacing:.7em; text-indent:.7em; text-transform:uppercase; color:rgba(255,214,160,.5); }
+.ubx-cards { position:absolute; inset:0; pointer-events:none; perspective:1600px; }
+
+/* one item: a 240 x 330 card, placed and scaled by the script */
+.ubx-card { position:absolute; left:-120px; top:-165px; width:240px; height:330px; border-radius:16px; padding:14px 14px 12px; display:flex; flex-direction:column; align-items:center; text-align:center; opacity:0;
+  --c:#ffd700; --ct:color-mix(in srgb, var(--c) 62%, #fff);
+  background:linear-gradient(180deg, color-mix(in srgb, var(--c) 13%, #1b1815) 0%, #15120f 46%, #0d0b0a 100%);
+  border:1px solid color-mix(in srgb, var(--c) 58%, #1a1714);
+  box-shadow:0 0 0 1px rgba(0,0,0,.55), 0 22px 44px rgba(0,0,0,.6), 0 0 42px color-mix(in srgb, var(--c) 34%, transparent), inset 0 1px 0 rgba(255,255,255,.07); }
+.ubx-card::before { content:''; position:absolute; left:18px; right:18px; top:-1px; height:3px; border-radius:0 0 4px 4px; background:linear-gradient(90deg, transparent, var(--c) 18%, var(--ct) 50%, var(--c) 82%, transparent); }
+.ubx-art { position:relative; width:100%; height:160px; flex:none; display:grid; place-items:center; }
+.ubx-art::before { content:''; position:absolute; inset:-6px 4px -2px; background:radial-gradient(closest-side, color-mix(in srgb, var(--c) 42%, transparent), transparent 72%); }
+.ubx-art img { position:relative; max-width:156px; max-height:156px; object-fit:contain; filter:drop-shadow(0 10px 14px rgba(0,0,0,.55)); }
+/* no picture for this item yet: a drawn token in the grade's colour with the item's initials */
+.ubx-token { position:relative; width:132px; height:146px; display:grid; place-items:center; clip-path:polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background:linear-gradient(150deg, var(--ct) 0%, var(--c) 38%, color-mix(in srgb, var(--c) 45%, #000) 100%); }
+.ubx-token::before { content:''; position:absolute; inset:5px; clip-path:inherit; background:linear-gradient(160deg, #1c1916 0%, color-mix(in srgb, var(--c) 22%, #100e0c) 100%); }
+.ubx-token::after { content:''; position:absolute; inset:5px; clip-path:inherit; background:linear-gradient(118deg, transparent 30%, rgba(255,255,255,.13) 44%, transparent 56%); }
+.ubx-token b { position:relative; font:700 46px/1 var(--disp); letter-spacing:.02em; color:var(--ct); text-shadow:0 2px 14px color-mix(in srgb, var(--c) 70%, transparent); }
+.ubx-kick { margin-top:2px; font:600 10px/1 var(--disp); letter-spacing:.24em; text-transform:uppercase; color:#a79f90; opacity:0; }
+/* the name in its quality's colour (--q), as the game's backpack shows it */
+.ubx-name { --q:#fbf6ee; margin-top:5px; font:700 19px/1.16 var(--disp); letter-spacing:.01em; color:var(--q); text-shadow:0 0 16px color-mix(in srgb, var(--q) 38%, transparent), 0 2px 2px rgba(0,0,0,.6); min-height:44px; display:flex; align-items:center; justify-content:center; opacity:0; }
+.ubx-name span { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.ubx-grade { margin-top:6px; display:flex; align-items:center; gap:7px; font:600 11px/1 var(--disp); letter-spacing:.16em; text-transform:uppercase; color:var(--ct); white-space:nowrap; }
+.ubx-pips { display:inline-flex; gap:3px; }
+.ubx-pips i { width:7px; height:7px; transform:rotate(45deg); background:var(--c); box-shadow:0 0 6px var(--c); }
+.ubx-pips i.off { background:transparent; box-shadow:none; outline:1px solid color-mix(in srgb, var(--c) 45%, transparent); outline-offset:-1px; }
+.ubx-effect { margin-top:7px; font:700 14px/1.1 var(--disp); letter-spacing:.04em; color:#e9d6ff; }
+.ubx-foot { margin-top:auto; width:100%; display:flex; align-items:baseline; justify-content:space-between; gap:8px; min-height:20px; }
+.ubx-extra { font-size:11px; color:#a79f90; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ubx-value { margin-left:auto; font:700 16px/1 var(--disp); font-variant-numeric:tabular-nums; color:#f1ebe1; white-space:nowrap; }
+.ubx-value small { font-weight:500; font-size:10px; color:#a79f90; margin-left:3px; }
+.ubx-tag { position:absolute; left:10px; top:11px; padding:4px 8px 3px; border-radius:6px; font:700 11px/1 var(--disp); letter-spacing:.16em; text-transform:uppercase; opacity:0; z-index:1; }
+.ubx-tag.strange { background:#cf6a32; color:#1a0e06; box-shadow:0 0 18px rgba(207,106,50,.65); }
+.ubx-tag.unusual { background:linear-gradient(90deg,#8650ac,#b98cf0); color:#140a20; box-shadow:0 0 22px rgba(160,110,240,.75); }
+.ubx-card.unusual { border-color:#b98cf0; box-shadow:0 0 0 1px rgba(0,0,0,.55), 0 22px 44px rgba(0,0,0,.6), 0 0 64px rgba(160,110,240,.55), inset 0 0 26px rgba(160,110,240,.16), inset 0 1px 0 rgba(255,255,255,.1); }
+.ubx-card.blank { --c:#8d857a; }
+.ubx-card.blank .ubx-name { font-size:16px; color:#cfc6b8; }
+
+/* crates that the bot did not open */
+.ubx-dead { position:absolute; left:0; top:0; transform:translate(-50%,0); font:600 11px/1.2 var(--disp); letter-spacing:.16em; text-transform:uppercase; color:#8d857a; text-align:center; opacity:0; white-space:nowrap; }
+
+/* top bar */
+.ubx-hud { position:absolute; left:0; right:0; top:0; padding:22px 28px 40px; display:flex; align-items:flex-start; gap:18px; background:linear-gradient(180deg, rgba(4,3,3,.72), rgba(4,3,3,0)); pointer-events:none; }
+.ubx-title { font:700 24px/1.1 var(--disp); letter-spacing:.02em; }
+.ubx-title b { color:#e8914f; font-weight:700; }
+.ubx-status { margin-top:7px; color:#b9b0a1; font-size:13px; min-height:18px; font-variant-numeric:tabular-nums; }
+.ubx-track { margin-top:10px; display:flex; gap:6px; }
+.ubx-track i { width:22px; height:4px; border-radius:2px; background:rgba(255,255,255,.14); }
+.ubx-track i.on { background:#ffe9c4; box-shadow:0 0 10px rgba(255,214,150,.9); }
+.ubx-track i.dead { background:rgba(228,107,107,.5); }
+.ubx-sp { flex:1; }
+.ubx-btns { display:flex; gap:8px; pointer-events:auto; }
+.ubx-btn { appearance:none; padding:8px 13px; border-radius:10px; border:1px solid rgba(255,255,255,.16); background:rgba(20,17,15,.62); color:#e9e2d6; font:600 13px/1 "Segoe UI",Inter,system-ui,sans-serif; cursor:pointer; backdrop-filter:blur(6px); }
+.ubx-btn:hover { border-color:rgba(232,145,79,.8); color:#fff; }
+.ubx-btn.primary { background:#cf6a32; border-color:#cf6a32; color:#fff; }
+.ubx-btn.on { border-color:#8fd16f; color:#c9f0b6; }
+.ubx-badge { position:absolute; left:26px; bottom:22px; padding:7px 12px 6px; border-radius:8px; border:1px solid rgba(232,196,95,.6); background:rgba(26,21,10,.78); color:#f0d989; font:700 12px/1 var(--disp); letter-spacing:.14em; text-transform:uppercase; pointer-events:none; }
+.ubx-badge.replay { border-color:rgba(127,159,201,.6); background:rgba(12,17,26,.78); color:#b9cdea; }
+
+/* the Unusual's moment */
+.ubx-spot { position:absolute; left:0; right:0; top:0; height:100%; pointer-events:none; text-align:center; }
+.ubx-spot-k { position:absolute; left:0; right:0; font:700 22px/1 var(--disp); letter-spacing:.9em; text-indent:.9em; text-transform:uppercase; color:#e3ccff; text-shadow:0 0 24px rgba(170,110,255,.9); opacity:0; }
+.ubx-spot-e { position:absolute; left:0; right:0; font:700 120px/1 var(--disp); letter-spacing:.02em; text-transform:uppercase; white-space:nowrap; }
+.ubx-spot-e span { display:inline-block; opacity:0; background:linear-gradient(180deg,#fff 12%,#ecd9ff 46%,#b98cf0 78%,#8650ac 100%); -webkit-background-clip:text; background-clip:text; color:transparent; filter:drop-shadow(0 0 26px rgba(160,100,255,.75)) drop-shadow(0 6px 0 rgba(30,10,60,.55)); }
+.ubx-spot-n { position:absolute; left:0; right:0; font:600 26px/1.2 var(--disp); letter-spacing:.06em; color:#f6efe5; opacity:0; text-shadow:0 2px 18px rgba(0,0,0,.9); }
+.ubx-spot-n { color:#c9a2f2; text-shadow:0 0 22px rgba(160,108,214,.8), 0 2px 18px rgba(0,0,0,.9); }
+.ubx-spot-n b { color:#cf6a32; } .ubx-spot-n i { font-style:normal; }
+
+/* the summary */
+.ubx-sum { position:absolute; inset:0; pointer-events:none; opacity:0; }
+.ubx-sum-head { position:absolute; left:0; right:0; top:0; padding:26px 28px 0; text-align:center; }
+.ubx-sum-head h2 { margin:0; font:700 34px/1.05 var(--disp); letter-spacing:.02em; }
+.ubx-sum-head h2 b { color:#e8914f; }
+.ubx-chips { margin-top:12px; display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+.ubx-chip { display:inline-flex; align-items:center; gap:7px; padding:5px 11px 4px; border-radius:999px; border:1px solid color-mix(in srgb, var(--c) 60%, transparent); background:color-mix(in srgb, var(--c) 14%, rgba(12,10,9,.8)); color:color-mix(in srgb, var(--c) 55%, #fff); font:600 12px/1 var(--disp); letter-spacing:.1em; text-transform:uppercase; }
+.ubx-chip b { font-size:14px; color:#fff; }
+.ubx-sum-foot { position:absolute; left:0; right:0; bottom:0; padding:0 28px 24px; display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center; }
+.ubx-total { font:700 22px/1.1 var(--disp); letter-spacing:.02em; font-variant-numeric:tabular-nums; }
+.ubx-total b { color:#8fd16f; }
+.ubx-note { color:#a79f90; font-size:13px; max-width:900px; }
+.ubx-note.warn { color:#e8c45f; }
+.ubx-sum-foot .ubx-btns { pointer-events:auto; }
+
+/* nothing opened, or the bench could not be reached */
+.ubx-fail { position:absolute; left:50%; top:42%; transform:translate(-50%,-50%); width:min(560px, 86vw); padding:22px 24px; border-radius:14px; border:1px solid rgba(228,107,107,.6); background:rgba(22,12,11,.9); text-align:center; display:none; }
+.ubx-fail h3 { margin:0 0 8px; font:700 20px/1.2 var(--disp); }
+.ubx-fail p { margin:0 0 16px; color:#d8cfc2; }
+@media (max-width: 900px) { .ubx-title { font-size:18px; } .ubx-btn { padding:7px 9px; font-size:12px; } .ubx-spot-k { letter-spacing:.5em; } }

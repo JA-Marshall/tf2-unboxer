@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TF2 Unboxer</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
+<link rel="stylesheet" href="/ui.css">
+<link rel="stylesheet" href="/unbox-show.css">
+<script src="/unbox-show.js"></script>
+</head>
+<body>
+<main>
+  <nav class="top"><a class="brand" href="/">TF2 Unboxer</a><a class="l on" href="/">Unbox</a><a class="l" href="/profit">Profit</a><span class="mode" id="mode"></span></nav>
+  <header>
+    <h1>Open <span>cases</span></h1>
+    <div class="meta"><span id="meta">loading…</span></div>
+  </header>
+  <div id="banner" class="banner" hidden></div>
+  <section class="panel" id="openPanel">
+    <h2>Open cases <small id="openMeta"></small></h2>
+    <div class="form">
+      <select id="ubCase"></select>
+      <span class="muted">with</span>
+      <select id="ubKey"></select>
+      <input type="number" id="ubCount" min="1" max="10" step="1" value="1" aria-label="How many">
+      <button class="btn" id="ubGo">Open</button>
+    </div>
+    <p class="note" id="openNote"></p>
+  </section>
+  <section class="row">
+    <div class="panel">
+      <h2>Demo <small>sample items, nothing is opened</small></h2>
+      <div class="form">
+        <select id="kind"></select>
+        <label>cases <input type="number" id="count" min="1" max="10" step="1" value="10"></label>
+        <select id="pace">
+          <option value="quick">Quick (best for filming)</option>
+          <option value="bot">At a real account's pace (about 3 s a case)</option>
+        </select>
+      </div>
+      <div class="form">
+        <button class="btn primary" id="play">Play the demo</button>
+        <button class="btn" id="shuffle" title="Same grades, different hats">Different items</button>
+      </div>
+      <p class="note">Items are picked from the Summer 2020 Cosmetic Case's real contents and its real Unusual effects, and the screen says "Demo" the whole time.</p>
+    </div>
+    <div class="panel">
+      <h2>Watch a batch again <small id="batchMeta"></small></h2>
+      <ul class="feed" id="batches"></ul>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>Filming it</h2>
+    <p class="note" style="margin-top:0">Press <b>Full screen</b> on the screen itself (top right) before you record. <b>Sound</b> is off until you switch it on there, and it remembers. <kbd>Space</kbd>, <kbd>Enter</kbd> or <kbd>Esc</kbd> skips to the items; <kbd>Esc</kbd> on the summary closes it. The crates open lowest grade first, so the ones still sealed are the better ones, and an Unusual always goes last with the screen to itself.</p>
+  </section>
+  <p class="note" id="msg"></p>
+</main>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const when = t => new Date(t * 1000).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const params = new URLSearchParams(location.search);
+  let d = null, seed = Number(params.get('seed')) || 1 + Math.floor(Math.random() * 1e6), show = null, working = false, armed = false, armTimer = null, keyPicked = false;
+  const say = t => { $('msg').textContent = t; };
+  const PACE = { quick: { lead: 1.5, gap: 0.42 }, bot: { lead: 4, gap: 3.2 } };
+  const prices = () => (d && d.pricing ? UnboxShow.fetchPrices : null);
+
+  async function demo(kind, count, pace, manual) {
+    let b;
+    try {
+      const r = await fetch(`/api/sample?kind=${encodeURIComponent(kind)}&count=${encodeURIComponent(count)}&seed=${seed}`, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      b = await r.json();
+    } catch (err) { say(`The demo could not be read (${err.message}).`); return; }
+    say('');
+    show = UnboxShow.open({ count: b.requested, caseName: b.case, sample: true, label: 'Demo · sample items · nothing was opened', source: UnboxShow.playback(b, PACE[pace] || PACE.quick), prices: prices(), manual });
+  }
+  function replay(batch) {
+    const isDemo = batch.entries.some(e => e.demo);
+    show = UnboxShow.open({ count: batch.entries.length, caseName: batch.case, label: `${isDemo ? 'Demo replay' : 'Replay'} · opened ${when(batch.at)}`, labelKind: 'replay', source: UnboxShow.playback({ entries: batch.entries, requested: batch.entries.length }), prices: prices() });
+  }
+
+  function disarm() { armed = false; clearTimeout(armTimer); $('ubGo').textContent = 'Open'; $('ubGo').className = 'btn'; }
+  function renderOpen() {
+    const live = d.mode === 'live';
+    const fill = (sel, rows, none) => { const keep = sel.value; sel.innerHTML = rows.length ? rows.map(r => `<option value="${esc(r.id)}">${esc(r.name)} (${r.count})</option>`).join('') : `<option value="">${none}</option>`; if ([...sel.options].some(o => o.value === keep)) sel.value = keep; };
+    fill($('ubCase'), d.cases || [], live && !d.gc ? 'waiting for the game coordinator…' : 'no cases in the backpack');
+    fill($('ubKey'), d.keys || [], live && !d.gc ? 'waiting for the game coordinator…' : 'no keys in the backpack');
+    // the key the case names, unless one was picked by hand
+    const c = (d.cases || []).find(x => x.id === $('ubCase').value);
+    if (c && c.likelyKey && !keyPicked) $('ubKey').value = c.likelyKey;
+    $('ubCount').max = d.max;
+    $('openMeta').textContent = `at most ${d.max} at a time`;
+    $('ubGo').disabled = !(d.cases || []).length || !(d.keys || []).length || !!d.busy || working;
+    $('openNote').innerHTML = live
+      ? '<b>Each case opened uses up a key and a case for good.</b> It cannot be undone. Press Open, then press again within 5 seconds to confirm.'
+      : 'Demo account: these cases and keys are pretend, and every result is marked as a demo. Set your Steam account in the environment to open real ones.';
+  }
+  function render() {
+    $('mode').textContent = d.mode === 'live' ? 'LIVE · real keys' : 'DEMO';
+    $('mode').className = `mode ${d.mode}`;
+    $('kind').innerHTML = (d.samples || []).map(s => `<option value="${esc(s.id)}">${esc(s.label)}</option>`).join('');
+    if (params.get('demo')) $('kind').value = params.get('demo');
+    const b = $('banner');
+    const problems = [];
+    if (d.mode === 'live' && d.lastError) problems.push(esc(d.lastError));
+    if (d.mode === 'live' && d.online && !d.gc) problems.push('Signed in to Steam, waiting for the TF2 game coordinator. If this lasts more than a minute, TF2 may be running on this account somewhere else.');
+    if (d.mode === 'live' && !d.online && !d.lastError) problems.push('Signing in to Steam…');
+    b.hidden = !problems.length;
+    b.innerHTML = problems.length ? `<span>⚠</span><div>${problems.join('<br>')}</div>` : '';
+    renderOpen();
+    const list = d.batches || [];
+    $('batchMeta').textContent = list.length ? `${list.length} in the log` : '';
+    $('batches').innerHTML = list.length === 0 ? '<li class="empty">Nothing has been opened yet. Each batch you open is listed here.</li>' : list.slice(0, 30).map((x, i) => {
+      const items = x.entries.flatMap(e => e.items);
+      const best = [...items].sort((a, c) => c.rank - a.rank)[0];
+      const n = f => items.filter(f).length;
+      return `<li><span class="t">${esc(when(x.at))}</span><span class="what">${x.entries.length} × ${esc(x.case)}${x.entries.some(e => e.demo) ? ' <span class="chip">demo</span>' : ''}<small>${best ? `best: ${esc([best.unusual ? 'Unusual' : best.strange ? 'Strange' : '', best.title, best.effect ? `(${best.effect.name || `effect ${best.effect.id}`})` : ''].filter(Boolean).join(' '))}` : 'nothing seen'}</small></span>${n(it => it.unusual) ? `<span class="chip big">${n(it => it.unusual)} unusual</span>` : ''}${n(it => it.strange && !it.unusual) ? `<span class="chip">${n(it => it.strange && !it.unusual)} strange</span>` : ''}<button class="btn" data-batch="${i}">Watch</button></li>`;
+    }).join('');
+    for (const btn of $('batches').querySelectorAll('button[data-batch]')) btn.onclick = () => replay(list[Number(btn.dataset.batch)]);
+  }
+
+  // opening: two presses (the first arms the button for 5 s), then ONE request, made by the screen so it can show each
+  // case as it is logged
+  $('ubCase').onchange = () => { keyPicked = false; renderOpen(); };
+  $('ubKey').onchange = () => { keyPicked = true; };
+  $('ubGo').onclick = () => {
+    if (working) return;
+    if (!armed) {
+      armed = true;
+      $('ubGo').textContent = d.mode === 'live' ? `Spend ${Number($('ubCount').value) || 0} key(s)? Press again` : 'Press again to open';
+      $('ubGo').className = d.mode === 'live' ? 'btn danger' : 'btn primary';
+      armTimer = setTimeout(disarm, 5000);
+      return;
+    }
+    disarm();
+    const c = (d.cases || []).find(x => x.id === $('ubCase').value);
+    const count = Number($('ubCount').value);
+    if (!c || !$('ubKey').value || !Number.isInteger(count) || count < 1 || count > d.max) { say(`Pick a case, a key and a number from 1 to ${d.max}.`); return; }
+    working = true; say('Opening…'); renderOpen();
+    show = UnboxShow.open({
+      count, caseName: c.name, prices: prices(),
+      source: UnboxShow.liveSource({ caseId: c.id, caseName: c.name, keyId: $('ubKey').value, count }),
+      onClose: r => { working = false; say(r.message || (r.complete ? '' : 'Still opening them. They show here when it is done.')); load(); }
+    });
+  };
+
+  $('play').onclick = () => demo($('kind').value, $('count').value, $('pace').value);
+  $('shuffle').onclick = () => { seed = 1 + Math.floor(Math.random() * 1e6); demo($('kind').value, $('count').value, $('pace').value); };
+  $('kind').onchange = () => { const s = (d.samples || []).find(x => x.id === $('kind').value); if (s) $('count').value = Math.max(s.count, s.id === 'stopped' ? 10 : 1); };
+
+  async function load() {
+    let r;
+    try { r = await fetch('/api/state', { cache: 'no-store' }); } catch { $('meta').textContent = 'server unreachable'; return; }
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) { $('meta').textContent = body.error || `unavailable (${r.status})`; return; }
+    const first = !d;
+    d = body;
+    UnboxShow.setCurrency(d.currency, d.venue);
+    $('meta').textContent = [d.name, d.mode === 'live' ? (d.gc ? 'connected to TF2' : d.online ? 'signed in' : 'offline') : 'no Steam account', d.busy ? `busy: ${d.busy}` : ''].filter(Boolean).join(' · ');
+    if (!armed && (!show || show.state.closed)) render();
+    // ?demo=lucky plays the demo at once (it opens nothing, so a reload is harmless)
+    if (first && params.get('demo')) demo(params.get('demo'), params.get('count') || 10, params.get('pace') || 'quick', params.get('manual') === '1');
+  }
+  load();
+  setInterval(() => { if (!working && (!show || show.state.closed)) load(); }, 10000);
+})();
+</script>
+</body>
+</html>

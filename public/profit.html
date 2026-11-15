@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unboxing profit</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
+<link rel="stylesheet" href="/ui.css">
+</head>
+<body>
+<main>
+  <nav class="top"><a class="brand" href="/">TF2 Unboxer</a><a class="l" href="/">Unbox</a><a class="l on" href="/profit">Profit</a><span class="mode" id="mode"></span></nav>
+  <header>
+    <h1>Unboxing <span>profit</span></h1>
+    <div class="meta"><span id="meta">loading…</span></div>
+  </header>
+  <div id="banner" class="banner" hidden></div>
+  <div class="tiles" id="tiles"></div>
+  <section class="panel">
+    <h2>What a case costs <small>the case could have been sold, and the key had to be bought</small></h2>
+    <div class="form">
+      <label>Case <input type="number" id="caseUsd" min="0" step="0.01" placeholder="auto"></label>
+      <label>Key <input type="number" id="keyUsd" min="0" step="0.01" placeholder="auto"></label>
+      <button class="btn" id="apply">Use these</button>
+      <button class="btn" id="reset">Back to the market's</button>
+    </div>
+    <p class="note" id="costNote"></p>
+  </section>
+  <section class="panel">
+    <h2>Sessions <small id="sessMeta"></small></h2>
+    <table>
+      <thead><tr><th>Opened</th><th class="l">What</th><th>Cost</th><th>Worth</th><th>Profit</th><th class="l">Not valued</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p class="note">Worth is what selling each item on the <b>Steam Community Market</b> at its lowest listing would pay, <b>after Steam's fees</b> (about 15%). Prices are Steam's public price overview, read a few seconds apart (Steam limits it), so a page with many new items fills in over a few minutes. An Unusual is counted but not valued: its price depends on its effect, and is left out rather than guessed. Click a session for its items.</p>
+  </section>
+  <p class="note" id="msg"></p>
+</main>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  let fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+  const usd = v => (v === null || v === undefined ? '<span class="faint">–</span>' : fmt.format(v));
+  const pl = v => (v === null || v === undefined ? '–' : `<span class="${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : '−'}${fmt.format(Math.abs(v))}</span>`);
+  const when = t => new Date(t * 1000).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  // the colour of a name by its quality, as on the unboxing screen
+  const Q = { Unique: '#ffd700', Strange: '#cf6a32', Unusual: '#a06cd6', Vintage: '#476291', Genuine: '#4d7455', Haunted: '#38f3ab', "Collector's": '#aa0000' };
+  const qcol = it => (it.unusual ? Q.Unusual : it.strange ? Q.Strange : Q[it.quality] || Q.Unique);
+  const store = { get: k => { try { return localStorage.getItem(k) || ''; } catch { return ''; } }, set: (k, v) => { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch { /* private mode */ } } };
+  const open = new Set();
+  let d = null;
+
+  function tiles(t) {
+    const tile = (k, v, s) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s || ''}</div></div>`;
+    $('tiles').innerHTML = [
+      tile('Cases opened', t.cases, `${t.items} items · ${t.unusuals} Unusual${t.unusuals === 1 ? '' : 's'}`),
+      tile('Cost in', usd(t.cost), t.perCase ? `${usd(t.perCase.cost)} a case` : ''),
+      tile('Worth on the Steam Market', usd(t.worth), `after fees · ${t.priced} of ${t.items} items priced`),
+      tile('Profit', pl(t.profit), t.perCase ? `${pl(t.perCase.profit)} a case` : '')
+    ].join('');
+  }
+
+  function itemsTable(s) {
+    return `<table><thead><tr><th class="l">Item</th><th>Lowest listing</th><th>After fees</th></tr></thead><tbody>${s.list.map(it => `<tr>
+      <td class="l"><span class="it">${it.image ? `<img src="${esc(it.image)}" alt="" referrerpolicy="no-referrer" loading="lazy">` : '<i></i>'}<span class="qn" style="--q:${qcol(it)}">${esc(it.label)}</span>${it.effect ? `<span class="chip u">★ ${esc(it.effect.name || `effect ${it.effect.id}`)}</span>` : ''}${it.grade ? `<span class="chip">${esc(it.grade.name)}</span>` : ''}</span></td>
+      <td>${it.unusual ? '<span class="faint">not valued</span>' : usd(it.price)}</td><td>${usd(it.net)}</td></tr>`).join('')}</tbody></table>`;
+  }
+
+  function render() {
+    const t = d.total;
+    tiles(t);
+    const s0 = d.sessions[0];
+    const c = s0 ? s0.costEach : null;
+    $('costNote').innerHTML = c ? `In use: case <b>${usd(c.caseUsd)}</b> (${esc(c.caseFrom || 'no price found: counted as 0')}), key <b>${usd(c.keyUsd)}</b> (${esc(c.keyFrom || 'no price found: counted as 0')}), so <b>${usd(c.each)}</b> a case.${t.costMissing ? ' Some costs had no price yet: type a figure above, or wait for the prices to load.' : ''}` : 'Nothing opened yet.';
+    $('sessMeta').textContent = d.sessions.length ? `${d.sessions.length} session${d.sessions.length === 1 ? '' : 's'} · ${d.logged} cases in the log` : '';
+    $('rows').innerHTML = d.sessions.length === 0 ? '<tr><td colspan="6" class="muted" style="text-align:center;padding:18px">Nothing has been opened yet. Each press of "Open" shows up here.</td></tr>' : d.sessions.map(s => {
+      const key = `${s.at}`;
+      const notes = [s.demo ? '<span class="chip">demo</span>' : '', s.unusuals ? `<span class="chip u">${s.unusuals} Unusual</span>` : '', s.unpriced ? `<span class="chip">${s.unpriced} no price</span>` : ''].join('');
+      return `<tr class="session" data-k="${esc(key)}"><td>${esc(when(s.at))}</td><td class="l">${s.cases} × ${esc(s.case)}</td><td>${usd(s.cost)}</td><td>${usd(s.worth)}</td><td>${pl(s.profit)}</td><td class="l">${notes}</td></tr>${open.has(key) ? `<tr class="items"><td colspan="6">${itemsTable(s)}</td></tr>` : ''}`;
+    }).join('');
+    // a picture that will not load gives way to a blank square
+    for (const img of $('rows').querySelectorAll('img')) img.addEventListener('error', () => img.replaceWith(document.createElement('i')), { once: true });
+    for (const tr of $('rows').querySelectorAll('tr.session')) tr.onclick = () => { const k = tr.dataset.k; if (open.has(k)) open.delete(k); else open.add(k); render(); };
+  }
+
+  async function load() {
+    const q = new URLSearchParams();
+    if (store.get('ubxPnlCase')) q.set('caseUsd', store.get('ubxPnlCase'));
+    if (store.get('ubxPnlKey')) q.set('keyUsd', store.get('ubxPnlKey'));
+    let r;
+    try { r = await fetch(`/api/pnl?${q}`, { cache: 'no-store' }); } catch { $('meta').textContent = 'server unreachable'; return; }
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) { $('meta').textContent = body.error || `unavailable (${r.status})`; return; }
+    d = body;
+    try { fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: d.currency || 'USD' }); } catch { /* keep USD */ }
+    $('mode').textContent = d.mode === 'live' ? 'LIVE · real keys' : 'DEMO';
+    $('mode').className = `mode ${d.mode}`;
+    const b = $('banner');
+    b.hidden = d.pricing;
+    b.innerHTML = d.pricing ? '' : '<span>ⓘ</span><div>Prices are off (PRICES=off). Type a case and key cost above to see the cost side; items are not valued.</div>';
+    $('meta').textContent = `prices read ${new Date(d.at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    render();
+  }
+  $('caseUsd').value = store.get('ubxPnlCase');
+  $('keyUsd').value = store.get('ubxPnlKey');
+  $('apply').onclick = () => { store.set('ubxPnlCase', $('caseUsd').value.trim()); store.set('ubxPnlKey', $('keyUsd').value.trim()); load(); };
+  $('reset').onclick = () => { $('caseUsd').value = ''; $('keyUsd').value = ''; store.set('ubxPnlCase', ''); store.set('ubxPnlKey', ''); load(); };
+  load();
+  setInterval(load, 60000);
+})();
+</script>
+</body>
+</html>
