@@ -3,6 +3,10 @@
 Open Team Fortress 2 cases from a Steam account you own, watch up to ten of them unbox at once on a full-screen
 animation, and see what each session made or lost.
 
+![Ten Summer 2020 Cosmetic Cases unboxing at once in demo mode, then the profit page](docs/demo.gif)
+
+<sub>Demo mode, sped up. Full-quality video: [docs/demo.mp4](docs/demo.mp4).</sub>
+
 - **One Docker container**, configured with environment variables. No database, no cloud account.
 - **Demo mode** that needs no Steam account at all: a pretend backpack of Summer 2020 Cosmetic Cases.
 - **Profit and loss page**: every session's cost (the case plus the key) against what came out, valued at Steam
@@ -183,8 +187,8 @@ loss), `src/prices.js` (Steam Market prices), `public/unbox-show.js` (the animat
   item schema, read for item names and icon file names.
 
 Team Fortress 2, Steam and the item names and icons are trademarks and property of Valve Corporation. This project is
-not affiliated with or endorsed by Valve. Item icons are not included in this repository; your browser loads them from
-Steam.
+not affiliated with or endorsed by Valve. Item icons are not included in the app; your browser loads them from Steam
+(the demo recording in `docs/` shows them as they appear on screen).
 
 ## Licence
 
